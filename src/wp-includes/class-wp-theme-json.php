@@ -113,9 +113,13 @@ class WP_Theme_JSON {
 			'value_key'         => 'color',
 			'css_vars'          => '--wp--preset--color--$slug',
 			'classes'           => array(
-				'.has-$slug-color'            => 'color',
-				'.has-$slug-background-color' => 'background-color',
-				'.has-$slug-border-color'     => 'border-color',
+				'.has-$slug-color'               => 'color',
+				'.has-$slug-background-color'    => 'background-color',
+				'.has-$slug-border-color'        => 'border-color',
+				'.has-$slug-border-top-color'    => 'border-top-color',
+				'.has-$slug-border-right-color'  => 'border-right-color',
+				'.has-$slug-border-bottom-color' => 'border-bottom-color',
+				'.has-$slug-border-left-color'   => 'border-left-color',
 			),
 			'properties'        => array( 'color', 'background-color', 'border-color' ),
 		),
@@ -181,6 +185,18 @@ class WP_Theme_JSON {
 		'border-color'               => array( 'border', 'color' ),
 		'border-width'               => array( 'border', 'width' ),
 		'border-style'               => array( 'border', 'style' ),
+		'border-top-color'           => array( 'border', 'top', 'color' ),
+		'border-top-width'           => array( 'border', 'top', 'width' ),
+		'border-top-style'           => array( 'border', 'top', 'style' ),
+		'border-right-color'         => array( 'border', 'right', 'color' ),
+		'border-right-width'         => array( 'border', 'right', 'width' ),
+		'border-right-style'         => array( 'border', 'right', 'style' ),
+		'border-bottom-color'        => array( 'border', 'bottom', 'color' ),
+		'border-bottom-width'        => array( 'border', 'bottom', 'width' ),
+		'border-bottom-style'        => array( 'border', 'bottom', 'style' ),
+		'border-left-color'          => array( 'border', 'left', 'color' ),
+		'border-left-width'          => array( 'border', 'left', 'width' ),
+		'border-left-style'          => array( 'border', 'left', 'style' ),
 		'color'                      => array( 'color', 'text' ),
 		'font-family'                => array( 'typography', 'fontFamily' ),
 		'font-size'                  => array( 'typography', 'fontSize' ),
@@ -305,6 +321,26 @@ class WP_Theme_JSON {
 			'radius' => null,
 			'style'  => null,
 			'width'  => null,
+			'top'    => array(
+				'color'  => null,
+				'style'  => null,
+				'width'  => null,
+			),
+			'right'  => array(
+				'color'  => null,
+				'style'  => null,
+				'width'  => null,
+			),
+			'bottom' => array(
+				'color'  => null,
+				'style'  => null,
+				'width'  => null,
+			),
+			'left'   => array(
+				'color'  => null,
+				'style'  => null,
+				'width'  => null,
+			),
 		),
 		'color'      => array(
 			'background' => null,
@@ -1575,7 +1611,7 @@ class WP_Theme_JSON {
 	}
 
 	/**
-	 * Returns whether a presets should be overriden or not.
+	 * Returns whether a presets should be overridden or not.
 	 *
 	 * @since 5.9.0
 	 *
@@ -1593,8 +1629,8 @@ class WP_Theme_JSON {
 		 * The relationship between whether to override the defaults
 		 * and whether the defaults are enabled is inverse:
 		 *
-		 * - If defaults are enabled  => theme presets should not be overriden
-		 * - If defaults are disabled => theme presets should be overriden
+		 * - If defaults are enabled  => theme presets should not be overridden
+		 * - If defaults are disabled => theme presets should be overridden
 		 *
 		 * For example, a theme sets defaultPalette to false,
 		 * making the default palette hidden from the user.
@@ -1688,7 +1724,7 @@ class WP_Theme_JSON {
 	 * @since 5.9.0
 	 *
 	 * @param array $node  The node with the presets to validate.
-	 * @param array $slugs The slugs that should not be overriden.
+	 * @param array $slugs The slugs that should not be overridden.
 	 * @return array The new node.
 	 */
 	private static function filter_slugs( $node, $slugs ) {
