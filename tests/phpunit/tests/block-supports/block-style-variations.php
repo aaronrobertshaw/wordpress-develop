@@ -662,4 +662,77 @@ class Tests_Block_Supports_BlockStyleVariations extends WP_UnitTestCase {
 			wp_render_block_style_variation_class_name( $block_content, $block )
 		);
 	}
+
+	/**
+	 * Renders the per-instance block style variation styles for a core/search block.
+	 *
+	 * @param array $block_styles   The core/search styles to merge into the theme data.
+	 * @param array $variation_data The variation style data.
+	 * @return string The variation stylesheet.
+	 */
+	private function render_66465_search_variation( $block_styles, $variation_data ) {
+		switch_theme( 'block-theme' );
+
+		register_block_style(
+			'core/search',
+			array(
+				'name'       => 'flashy66465',
+				'label'      => 'Flashy',
+				'style_data' => $variation_data,
+			)
+		);
+
+		$filter = static function ( $theme_json ) use ( $block_styles ) {
+			return $theme_json->update_with(
+				array(
+					'version'  => WP_Theme_JSON::LATEST_SCHEMA,
+					'settings' => array( 'viewport' => array( 'mobile' => '480px' ) ),
+					'styles'   => array( 'blocks' => array( 'core/search' => $block_styles ) ),
+				)
+			);
+		};
+
+		add_filter( 'wp_theme_json_data_theme', $filter );
+		WP_Theme_JSON_Resolver::clean_cached_data();
+
+		$parsed_block = array(
+			'blockName' => 'core/search',
+			'attrs'     => array( 'className' => 'wp-block-search is-style-flashy66465' ),
+		);
+
+		wp_deregister_style( 'block-style-variation-styles' );
+		wp_render_block_style_variation_support_styles( $parsed_block );
+		$inline_styles = wp_styles()->get_data( 'block-style-variation-styles', 'after' );
+
+		remove_filter( 'wp_theme_json_data_theme', $filter );
+		unregister_block_style( 'core/search', 'flashy66465' );
+
+		return is_array( $inline_styles ) ? implode( '', $inline_styles ) : '';
+	}
+
+	/**
+	 * A block style with its own text gradient and a breakpoint text color gets
+	 * the fill back on the color feature selector.
+	 *
+	 * @ticket 66465
+	 *
+	 * @covers ::wp_render_block_style_variation_support_styles
+	 */
+	public function test_66465_rendered_variation_breakpoint_text_color_over_own_text_gradient_resets_fill() {
+		$stylesheet = $this->render_66465_search_variation(
+			array(),
+			array(
+				'background' => array(
+					'gradient'       => 'linear-gradient(120deg,#ff5f6d 0%,#7f00ff 100%)',
+					'backgroundClip' => 'text',
+				),
+				'@mobile'    => array( 'color' => array( 'text' => '#00ff00' ) ),
+			)
+		);
+
+		$this->assertMatchesRegularExpression(
+			'/@media \(width <= 480px\)\{:root :where\([^{]*\.wp-block-search__button[^{]*\)\{color: #00ff00;-webkit-text-fill-color: currentColor;\}\}/',
+			$stylesheet
+		);
+	}
 }
