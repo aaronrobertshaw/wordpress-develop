@@ -10720,4 +10720,378 @@ class Tests_Theme_wpThemeJson extends WP_UnitTestCase {
 		$this->assertStringContainsString( '{:root :where(.custom-p.is-style-fancy){color:blue;}}', $actual );
 		$this->assertStringNotContainsString( ':root :where(p.is-style-fancy){color:', $actual );
 	}
+
+	/**
+	 * Builds the styles stylesheet used by the #66465 tests.
+	 *
+	 * @param array  $blocks     Block styles keyed by block name.
+	 * @param string $class_name Optional. Theme JSON class to instantiate.
+	 * @return string The stylesheet.
+	 */
+	private function get_66465_stylesheet( $blocks, $class_name = 'WP_Theme_JSON' ) {
+		$theme_json = new $class_name(
+			array(
+				'version'  => WP_Theme_JSON::LATEST_SCHEMA,
+				'settings' => array(
+					'viewport' => array(
+						'mobile' => '480px',
+						'tablet' => '768px',
+					),
+				),
+				'styles'   => array( 'blocks' => $blocks ),
+			)
+		);
+
+		return $theme_json->get_stylesheet(
+			array( 'styles' ),
+			null,
+			array(
+				'skip_root_layout_styles'        => true,
+				'include_block_style_variations' => true,
+			)
+		);
+	}
+
+	/**
+	 * Returns a WP_Theme_JSON subclass that gives core/button comma separated
+	 * `color` and `background` feature selectors, since no core block with
+	 * pseudo states has feature selectors.
+	 *
+	 * @return string Class name.
+	 */
+	private function get_66465_button_feature_selector_class() {
+		$instance = new class() extends WP_Theme_JSON {
+			protected static function get_blocks_metadata() {
+				$metadata = parent::get_blocks_metadata();
+
+				$metadata['core/button']['selectors']['color']      = '.wp-block-button .wp-block-button__link .a, .wp-block-button .wp-block-button__link .b';
+				$metadata['core/button']['selectors']['background'] = '.wp-block-button .wp-block-button__link .a, .wp-block-button .wp-block-button__link .b';
+
+				return $metadata;
+			}
+		};
+
+		return get_class( $instance );
+	}
+
+	/**
+	 * Text gradient used by the #66465 tests.
+	 *
+	 * @return array Background styles.
+	 */
+	private function get_66465_text_gradient() {
+		return array(
+			'gradient'       => 'linear-gradient(120deg,#ff5f6d 0%,#7f00ff 100%)',
+			'backgroundClip' => 'text',
+		);
+	}
+
+	/**
+	 * @ticket 66465
+	 */
+	public function test_66465_hover_text_color_resets_fill_on_comma_separated_feature_selector() {
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'core/button' => array(
+					'background' => $this->get_66465_text_gradient(),
+					':hover'     => array( 'color' => array( 'text' => '#00ff00' ) ),
+					'@mobile'    => array(
+						':hover' => array( 'color' => array( 'text' => '#0000ff' ) ),
+					),
+				),
+			),
+			$this->get_66465_button_feature_selector_class()
+		);
+
+		$this->assertStringContainsString(
+			':root :where(.wp-block-button .wp-block-button__link .a:hover, .wp-block-button .wp-block-button__link .b:hover){color: #00ff00;-webkit-text-fill-color: currentColor;}',
+			$stylesheet
+		);
+		$this->assertStringContainsString(
+			'@media (width <= 480px){:root :where(.wp-block-button .wp-block-button__link .a:hover, .wp-block-button .wp-block-button__link .b:hover){color: #0000ff;-webkit-text-fill-color: currentColor;}}',
+			$stylesheet
+		);
+		$this->assertSame( 2, substr_count( $stylesheet, '-webkit-text-fill-color: currentColor' ) );
+	}
+
+	/**
+	 * @ticket 66465
+	 */
+	public function test_66465_variation_hover_text_color_resets_fill_on_feature_selector() {
+		register_block_style(
+			'core/button',
+			array(
+				'name'  => 'flashy66465',
+				'label' => 'Flashy',
+			)
+		);
+
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'core/button' => array(
+					'background' => $this->get_66465_text_gradient(),
+					'variations' => array(
+						'flashy66465' => array(
+							':hover' => array( 'color' => array( 'text' => '#00ff00' ) ),
+						),
+					),
+				),
+			),
+			$this->get_66465_button_feature_selector_class()
+		);
+
+		unregister_block_style( 'core/button', 'flashy66465' );
+
+		$this->assertMatchesRegularExpression(
+			'/:root :where\([^{]*is-style-flashy66465[^{]*\.a:hover[^{]*\.b:hover\)\{color: #00ff00;-webkit-text-fill-color: currentColor;\}/',
+			$stylesheet
+		);
+		$this->assertStringNotContainsString(
+			':root :where(.wp-block-button .wp-block-button__link.is-style-flashy66465:hover){-webkit-text-fill-color: currentColor;}',
+			$stylesheet
+		);
+	}
+
+	/**
+	 * @ticket 66465
+	 */
+	public function test_66465_variation_mobile_text_color_resets_fill_on_feature_selector() {
+		register_block_style(
+			'core/search',
+			array(
+				'name'  => 'flashy66465',
+				'label' => 'Flashy',
+			)
+		);
+
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'core/search' => array(
+					'background' => $this->get_66465_text_gradient(),
+					'variations' => array(
+						'flashy66465' => array(
+							'@mobile' => array( 'color' => array( 'text' => '#00ff00' ) ),
+						),
+					),
+				),
+			)
+		);
+
+		unregister_block_style( 'core/search', 'flashy66465' );
+
+		$this->assertStringContainsString(
+			'@media (width <= 480px){:root :where(.wp-block-search.is-style-flashy66465 .wp-block-search__button, .wp-block-search.wp-block-search__no-button.is-style-flashy66465 .wp-block-search__input){color: #00ff00;-webkit-text-fill-color: currentColor;}}',
+			$stylesheet
+		);
+		$this->assertSame( 1, substr_count( $stylesheet, '-webkit-text-fill-color: currentColor' ) );
+	}
+
+	/**
+	 * Blocks without feature selectors must render exactly as before #66465.
+	 *
+	 * @ticket 66465
+	 */
+	public function test_66465_blocks_without_feature_selectors_are_unchanged() {
+		register_block_style(
+			'core/group',
+			array(
+				'name'  => 'flashy66465',
+				'label' => 'Flashy',
+			)
+		);
+
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'core/group'  => array(
+					'background' => $this->get_66465_text_gradient(),
+					'@mobile'    => array( 'color' => array( 'text' => '#00ff00' ) ),
+					'@tablet'    => array( 'background' => array( 'backgroundClip' => 'border-box' ) ),
+					'variations' => array(
+						'flashy66465' => array(
+							'@mobile' => array( 'color' => array( 'text' => '#0000ff' ) ),
+						),
+					),
+				),
+				'core/button' => array(
+					'background' => $this->get_66465_text_gradient(),
+					':hover'     => array( 'color' => array( 'text' => '#00ff00' ) ),
+					'@mobile'    => array(
+						':hover' => array( 'color' => array( 'text' => '#0000ff' ) ),
+					),
+				),
+			)
+		);
+
+		unregister_block_style( 'core/group', 'flashy66465' );
+
+		$expected = ':root :where(.wp-block-group){background-image: linear-gradient(120deg,#ff5f6d 0%,#7f00ff 100%);background-clip: text;-webkit-background-clip: text;-webkit-text-fill-color: transparent;}' .
+			'@media (width <= 480px){:root :where(.wp-block-group.is-style-flashy66465){color: #0000ff;-webkit-text-fill-color: currentColor;}}' .
+			'@media (width <= 480px){:root :where(.wp-block-group){color: #00ff00;-webkit-text-fill-color: currentColor;}}' .
+			'@media (480px < width <= 768px){:root :where(.wp-block-group){background-clip: border-box;-webkit-text-fill-color: currentColor;background-image: unset;}}' .
+			':root :where(.wp-block-button .wp-block-button__link){background-image: linear-gradient(120deg,#ff5f6d 0%,#7f00ff 100%);background-clip: text;-webkit-background-clip: text;-webkit-text-fill-color: transparent;}' .
+			':root :where(.wp-block-button .wp-block-button__link:hover){color: #00ff00;-webkit-text-fill-color: currentColor;}' .
+			'@media (width <= 480px){:root :where(.wp-block-button .wp-block-button__link:hover){color: #0000ff;-webkit-text-fill-color: currentColor;}}';
+
+		$this->assertSame( $expected, $stylesheet );
+	}
+
+	/**
+	 * A block style's main rule now gets the text clip check on every block,
+	 * including blocks without feature selectors (trunk printed only the color).
+	 *
+	 * @ticket 66465
+	 */
+	public function test_66465_variation_main_rule_text_color_over_block_text_gradient_resets_fill() {
+		register_block_style(
+			'core/group',
+			array(
+				'name'  => 'flashy66465',
+				'label' => 'Flashy',
+			)
+		);
+
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'core/group' => array(
+					'background' => $this->get_66465_text_gradient(),
+					'variations' => array(
+						'flashy66465' => array( 'color' => array( 'text' => '#ff0000' ) ),
+					),
+				),
+			)
+		);
+
+		unregister_block_style( 'core/group', 'flashy66465' );
+
+		$this->assertStringContainsString(
+			':root :where(.wp-block-group.is-style-flashy66465){color: #ff0000;-webkit-text-fill-color: currentColor;}',
+			$stylesheet
+		);
+	}
+
+	/**
+	 * Without a `background` feature selector the clip escape stays on the root selector.
+	 *
+	 * @ticket 66465
+	 */
+	public function test_66465_clip_escape_falls_back_to_root_without_background_feature_selector() {
+		register_block_type(
+			'test/feature-selector-66465',
+			array(
+				'api_version' => 3,
+				'selectors'   => array(
+					'root'  => '.wp-block-test-feature-selector-66465',
+					'color' => '.wp-block-test-feature-selector-66465 .inner',
+				),
+			)
+		);
+
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'test/feature-selector-66465' => array(
+					'background' => $this->get_66465_text_gradient(),
+					'@mobile'    => array(
+						'background' => array( 'backgroundClip' => 'border-box' ),
+						'color'      => array( 'text' => '#00ff00' ),
+					),
+				),
+			)
+		);
+
+		$this->assertStringContainsString(
+			'@media (width <= 480px){:root :where(.wp-block-test-feature-selector-66465){background-clip: border-box;-webkit-text-fill-color: currentColor;background-image: unset;}',
+			$stylesheet
+		);
+		// The root's border-box rule already resets the fill, and `.inner` inherits it.
+		$this->assertStringContainsString(
+			':root :where(.wp-block-test-feature-selector-66465 .inner){color: #00ff00;}}',
+			$stylesheet
+		);
+
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'test/feature-selector-66465' => array(
+					'background' => $this->get_66465_text_gradient(),
+					'@mobile'    => array( 'color' => array( 'text' => '#00ff00' ) ),
+				),
+			)
+		);
+
+		$this->assertStringContainsString(
+			'@media (width <= 480px){:root :where(.wp-block-test-feature-selector-66465 .inner){color: #00ff00;-webkit-text-fill-color: currentColor;}}',
+			$stylesheet
+		);
+		unregister_block_type( 'test/feature-selector-66465' );
+
+		$this->assertSame( 1, substr_count( $stylesheet, '-webkit-text-fill-color: currentColor' ) );
+	}
+
+	/**
+	 * An object `color` feature selector puts the fill reset on its `text` subfeature selector.
+	 *
+	 * @ticket 66465
+	 */
+	public function test_66465_fill_reset_uses_text_subfeature_selector() {
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'core/tab-list' => array(
+					'background' => $this->get_66465_text_gradient(),
+					'@mobile'    => array( 'color' => array( 'text' => '#00ff00' ) ),
+				),
+			)
+		);
+
+		$this->assertStringContainsString(
+			'@media (width <= 480px){:root :where(.wp-block-tab-list button){color: #00ff00;-webkit-text-fill-color: currentColor;}}',
+			$stylesheet
+		);
+		$this->assertSame( 1, substr_count( $stylesheet, '-webkit-text-fill-color: currentColor' ) );
+	}
+
+	/**
+	 * @ticket 66465
+	 */
+	public function test_66465_text_color_without_text_gradient_gets_no_reset() {
+		register_block_style(
+			'core/search',
+			array(
+				'name'  => 'flashy66465',
+				'label' => 'Flashy',
+			)
+		);
+		register_block_style(
+			'core/group',
+			array(
+				'name'  => 'flashy66465',
+				'label' => 'Flashy',
+			)
+		);
+
+		$stylesheet = $this->get_66465_stylesheet(
+			array(
+				'core/search' => array(
+					'background' => array( 'gradient' => 'linear-gradient(120deg,#ff5f6d 0%,#7f00ff 100%)' ),
+					'@mobile'    => array( 'color' => array( 'text' => '#0b3d91' ) ),
+					'variations' => array(
+						'flashy66465' => array( 'color' => array( 'text' => '#00ff00' ) ),
+					),
+				),
+				'core/button' => array(
+					':hover' => array( 'color' => array( 'text' => '#00ff00' ) ),
+				),
+				// No gradient anywhere: not at the root, in the block style or at a breakpoint.
+				'core/group'  => array(
+					'variations' => array(
+						'flashy66465' => array( 'color' => array( 'text' => '#ff0000' ) ),
+					),
+				),
+			)
+		);
+
+		unregister_block_style( 'core/search', 'flashy66465' );
+		unregister_block_style( 'core/group', 'flashy66465' );
+
+		$this->assertStringContainsString( ':root :where(.wp-block-group.is-style-flashy66465){color: #ff0000;}', $stylesheet );
+		$this->assertStringNotContainsString( '-webkit-text-fill-color', $stylesheet );
+	}
 }
